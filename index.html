@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Performative Reader</title>
+<meta name="description" content="Import your Goodreads library, rank it as a tier list, and bend your star ratings to a respectable curve — with half and quarter stars.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📚</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..800;1,9..144,400..700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+<script src="app.js" defer></script>
+<script data-goatcounter="https://rwall.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
+</head>
+<body>
+
+<header class="topbar">
+  <a class="brand" href="#" id="brand">
+    <span class="brand-mark" aria-hidden="true">★</span>
+    <span class="brand-name">The Performative Reader</span>
+  </a>
+  <nav class="tabs" id="tabs" role="tablist" hidden>
+    <button class="tab" role="tab" data-view="tiers">Tier list</button>
+    <button class="tab" role="tab" data-view="curve">Curve</button>
+    <button class="tab" role="tab" data-view="export">Export</button>
+  </nav>
+  <div class="top-actions" id="topActions" hidden>
+    <button class="icon-btn" id="undoBtn" title="Undo (Ctrl+Z)" aria-label="Undo">↶</button>
+    <button class="icon-btn" id="redoBtn" title="Redo (Ctrl+Y)" aria-label="Redo">↷</button>
+    <button class="btn ghost small" id="importBtn">Import…</button>
+  </div>
+</header>
+
+<main>
+  <!-- Landing -->
+  <section id="view-landing" class="view landing" hidden>
+    <h1>The Performative Reader</h1>
+    <p class="lede">Import your Goodreads library, sort your books in a tier list, and redistribute your star ratings along a curve. Supports half and quarter stars, including ratings above 5.</p>
+
+    <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Choose a Goodreads export file">
+      <span class="dz-icon" aria-hidden="true">⤓</span>
+      <strong>Drop your Goodreads export here</strong>
+      <span>or click to choose <code>goodreads_library_export.csv</code></span>
+    </div>
+    <div class="landing-actions">
+      <button class="btn" id="demoBtn">Try it with a demo shelf</button>
+      <button class="btn ghost" id="landingRestore">Restore a backup</button>
+    </div>
+
+    <ol class="steps">
+      <li><b>Export.</b> On Goodreads open <a href="https://www.goodreads.com/review/import" target="_blank" rel="noopener">My Books → Import and export</a> and click <i>Export Library</i>. StoryGraph exports work too.</li>
+      <li><b>Rank.</b> Your read books are sorted into tiers by their stars. Drag to reorder; further left means better.</li>
+      <li><b>Re-rate.</b> Pick a distribution, set limits per rating, apply it, and export in the same format you imported.</li>
+    </ol>
+    <p class="fineprint">Your data is stored in your browser only. Covers come from Open Library.</p>
+  </section>
+
+  <!-- Tier list -->
+  <section id="view-tiers" class="view" hidden>
+    <div class="toolbar">
+      <input type="search" id="search" placeholder="Find a book…" aria-label="Find a book">
+      <label class="field">Precision
+        <select id="tlStep">
+          <option value="1">Whole ★</option>
+          <option value="0.5">Half ★</option>
+          <option value="0.25">Quarter ★</option>
+        </select>
+      </label>
+      <label class="field">Top tier <select id="tlMax"></select></label>
+      <label class="field">Sort each tier
+        <select id="sortTiers">
+          <option value="">—</option>
+          <option value="dateRead">by date read</option>
+          <option value="avg">by Goodreads average</option>
+          <option value="title">by title</option>
+          <option value="author">by author</option>
+          <option value="shuffle">shuffle</option>
+        </select>
+      </label>
+      <div class="seg" id="cardMode">
+        <button data-v="covers">Covers</button>
+        <button data-v="titles">Titles</button>
+      </div>
+      <label class="check"><input type="checkbox" id="hideEmpty"> Hide empty tiers</label>
+    </div>
+    <p class="stats" id="stats"></p>
+    <div id="tiers" class="tiers"></div>
+  </section>
+
+  <!-- Curve -->
+  <section id="view-curve" class="view" hidden>
+    <div class="curve-layout">
+      <aside class="panel controls">
+        <h2>Shape</h2>
+        <div class="seg full" id="method">
+          <button data-v="normal">Bell curve</button>
+          <button data-v="flat">Flat</button>
+          <button data-v="refine">Refine tiers</button>
+        </div>
+        <p class="hint" id="methodHint"></p>
+
+        <h2>Precision</h2>
+        <div class="seg full" id="dStep">
+          <button data-v="1">Whole</button>
+          <button data-v="0.5">Half</button>
+          <button data-v="0.25">Quarter</button>
+        </div>
+        <div class="row2">
+          <label class="field stack">Lowest <select id="dMin"></select></label>
+          <label class="field stack">Highest <select id="dMax"></select></label>
+        </div>
+
+        <div id="normalControls">
+          <h2>Curve</h2>
+          <label class="slider"><span>Center <output id="meanOut"></output></span>
+            <input type="range" id="mean" min="1" max="5.75" step="0.05"></label>
+          <label class="slider"><span>Spread <output id="sdOut"></output></span>
+            <input type="range" id="sd" min="0.2" max="2.5" step="0.05"></label>
+          <button class="btn small ghost" id="matchBtn">Match my current ratings</button>
+        </div>
+
+        <div id="refineControls">
+          <h2>Within each tier</h2>
+          <label class="field stack">Spread each tier <select id="spread"></select></label>
+          <div class="seg full" id="shape">
+            <button data-v="even">Even split</button>
+            <button data-v="bell">Mostly unchanged</button>
+          </div>
+        </div>
+      </aside>
+
+      <div class="panel preview">
+        <div class="preview-head">
+          <div>
+            <h2>Proposed ratings</h2>
+            <p class="stats" id="curveStats"></p>
+          </div>
+          <button class="btn primary" id="applyBtn">Apply to tier list</button>
+        </div>
+        <p class="warning" id="curveWarning" hidden></p>
+        <div class="dist-table" id="distTable"></div>
+        <details class="changes" open>
+          <summary>Who moves <span id="changeCount" class="muted"></span></summary>
+          <label class="check"><input type="checkbox" id="onlyChanged"> Only show books that change</label>
+          <ul id="changeList" class="change-list"></ul>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- Export -->
+  <section id="view-export" class="view" hidden>
+    <div class="export-layout">
+      <div class="panel">
+        <h2>Download CSV</h2>
+        <p class="hint">Same columns and rows as your import — only the ratings change.</p>
+        <fieldset>
+          <legend>Rating column</legend>
+          <label class="radio"><input type="radio" name="expRating" value="exact"> <span>Performative rating <small>fractions stay fractions, e.g. 4.25</small></span></label>
+          <label class="radio"><input type="radio" name="expRating" value="rounded"> <span>Rounded to whole stars <small>for importers that only accept 1–5</small></span></label>
+          <label class="radio"><input type="radio" name="expRating" value="original"> <span>Leave untouched <small>only the extra columns carry your ranking</small></span></label>
+        </fieldset>
+        <label class="field" id="roundField">Round
+          <select id="expRound">
+            <option value="nearest">to nearest (4.5 → 5)</option>
+            <option value="down">down (4.75 → 4)</option>
+            <option value="up">up (4.25 → 5)</option>
+          </select>
+        </label>
+        <label class="check"><input type="checkbox" id="expExtra"> <span>Add <code>Performative Rating</code> and <code>Performative Rank</code> columns <small>import this file next time to pick up exactly where you left off</small></span></label>
+        <label class="check"><input type="checkbox" id="expOthers"> <span>Keep books that aren’t on your read shelf</span></label>
+        <div class="btn-row"><button class="btn primary" id="downloadCsv">Download CSV</button></div>
+        <pre class="csv-preview" id="csvPreview"></pre>
+      </div>
+
+      <div class="panel">
+        <h2>Show off</h2>
+        <p class="hint">A plain-text tier list, ready to post.</p>
+        <textarea id="shareText" rows="12" readonly></textarea>
+        <div class="btn-row"><button class="btn" id="copyShare">Copy</button></div>
+
+        <h2>Keep your ranking</h2>
+        <p class="hint">Your ranking is saved in this browser automatically. A backup moves it to another device.</p>
+        <div class="btn-row">
+          <button class="btn" id="backupBtn">Download backup</button>
+          <button class="btn ghost" id="restoreBtn">Restore backup</button>
+          <button class="btn ghost danger" id="resetBtn">Forget everything</button>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<input type="file" id="fileInput" accept=".csv,.json,text/csv,application/json" hidden>
+
+<dialog id="bookDialog" class="dialog">
+  <form method="dialog" class="dlg-close"><button aria-label="Close">✕</button></form>
+  <div id="bookBody"></div>
+</dialog>
+
+<dialog id="importDialog" class="dialog narrow">
+  <h2>You already have a ranking</h2>
+  <p id="importInfo"></p>
+  <form method="dialog" class="btn-row">
+    <button class="btn primary" value="merge">Merge — keep my ranking</button>
+    <button class="btn ghost danger" value="replace">Replace everything</button>
+    <button class="btn ghost" value="">Cancel</button>
+  </form>
+</dialog>
+
+<dialog id="confirmDialog" class="dialog narrow">
+  <h2>Forget everything?</h2>
+  <p>This clears your ranking from this browser. Download a backup first if you might want it back.</p>
+  <form method="dialog" class="btn-row">
+    <button class="btn danger" value="yes">Forget it all</button>
+    <button class="btn ghost" value="">Cancel</button>
+  </form>
+</dialog>
+
+<div class="drop-overlay" id="dropOverlay"><span>Drop to import</span></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
