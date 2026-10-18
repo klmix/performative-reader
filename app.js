@@ -505,6 +505,7 @@ const covers = (() => {
   const persist = debounce(() => { try { localStorage.setItem(KEY, JSON.stringify(cache)); } catch { /* full */ } }, 1500);
   const queue = [];
   const waiters = new Map();
+  const loaded = new Set(); // image URLs the browser already holds this session
   let active = 0;
 
   const cacheKey = (b) => b.isbn || `${b.title}|${b.author}`.toLowerCase();
@@ -550,17 +551,29 @@ const covers = (() => {
     pump();
   }
 
-  return { request, url };
+  // URL of a cover that has already loaded this session, so it can be shown without waiting.
+  function readyUrl(b, size = 'M') {
+    const id = cache[cacheKey(b)];
+    const u = id ? url(id, size) : null;
+    return u && loaded.has(u) ? u : null;
+  }
+
+  return { request, url, readyUrl, loaded };
 })();
 
 function attachCover(box, book, size = 'M') {
   if (!box || !book || box.querySelector('img')) return;
+  const ready = covers.readyUrl(book, size);
+  if (ready) return box.append(h('img', { alt: '', src: ready }));
   covers.request(book, (id) => {
     if (!id) return;
     const img = new Image();
     img.alt = '';
     img.decoding = 'async';
-    img.onload = () => { if (!box.querySelector('img')) box.append(img); };
+    img.onload = () => {
+      covers.loaded.add(img.src);
+      if (!box.querySelector('img')) box.append(img);
+    };
     img.src = covers.url(id, size);
   });
 }
@@ -623,7 +636,10 @@ function cardFor(id) {
       h('span', { class: 'fallback' }, h('span', { class: 'fb-title' }, shortTitle(b.title)), h('span', { class: 'fb-author' }, b.author))),
     h('span', { class: 'meta' }, h('span', { class: 'm-title' }, shortTitle(b.title)), h('span', { class: 'm-author' }, b.author)),
     b.original ? h('span', { class: 'orig', title: 'Original rating' }, fmt(b.original) + '★') : null);
-  if (state.ui.cardMode === 'covers') coverIO.observe(card);
+  if (state.ui.cardMode === 'covers') {
+    if (covers.readyUrl(b)) attachCover(card.querySelector('.cover'), b);
+    else coverIO.observe(card);
+  }
   return card;
 }
 
@@ -793,7 +809,7 @@ function openBook(id) {
 
   const cover = h('div', { class: 'cover', style: { '--h': String(hashStr(b.title) % 360) } },
     h('span', { class: 'fallback' }, h('span', { class: 'fb-title' }, shortTitle(b.title)), h('span', { class: 'fb-author' }, b.author)));
-  attachCover(cover, b, 'L');
+  attachCover(cover, b);
 
   const facts = [
     ['Performative', cur == null ? 'unrated' : `${fmt(cur)}★ · #${ranked.indexOf(id) + 1} of ${ranked.length}`],
