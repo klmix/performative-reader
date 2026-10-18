@@ -509,7 +509,7 @@ const covers = (() => {
   let active = 0;
 
   const cacheKey = (b) => b.isbn || `${b.title}|${b.author}`.toLowerCase();
-  const url = (id, size = 'M') => `https://covers.openlibrary.org/b/id/${id}-${size}.jpg`;
+  const url = (id, size = 'S') => `https://covers.openlibrary.org/b/id/${id}-${size}.jpg`;
 
   async function lookup(b) {
     const title = b.title.replace(/\s*\([^)]*#[^)]*\)\s*$/, '').replace(/:.*$/, '').trim();
@@ -552,7 +552,7 @@ const covers = (() => {
   }
 
   // URL of a cover that has already loaded this session, so it can be shown without waiting.
-  function readyUrl(b, size = 'M') {
+  function readyUrl(b, size = 'S') {
     const id = cache[cacheKey(b)];
     const u = id ? url(id, size) : null;
     return u && loaded.has(u) ? u : null;
@@ -561,7 +561,7 @@ const covers = (() => {
   return { request, url, readyUrl, loaded };
 })();
 
-function attachCover(box, book, size = 'M') {
+function attachCover(box, book, size = 'S') {
   if (!box || !book || box.querySelector('img')) return;
   const ready = covers.readyUrl(book, size);
   if (ready) return box.append(h('img', { alt: '', src: ready }));
@@ -809,7 +809,7 @@ function openBook(id) {
 
   const cover = h('div', { class: 'cover', style: { '--h': String(hashStr(b.title) % 360) } },
     h('span', { class: 'fallback' }, h('span', { class: 'fb-title' }, shortTitle(b.title)), h('span', { class: 'fb-author' }, b.author)));
-  attachCover(cover, b);
+  attachCover(cover, b, 'M');
 
   const facts = [
     ['Performative', cur == null ? 'unrated' : `${fmt(cur)}★ · #${ranked.indexOf(id) + 1} of ${ranked.length}`],
